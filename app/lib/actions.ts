@@ -7,19 +7,36 @@ import { z } from 'zod'
 
 const FormSchema = z.object({
   id: z.string(),
-  customerId: z.string(),
-  amount: z.coerce.number(),
-  status: z.enum(['pending', 'paid']),
-  date: z.string()
-})
+  customerId: z.string({ invalid_type_error: 'Please select a customer.', }),
+  amount: z.coerce.number().gt(0, { message: 'Please enter an amount greater than $0.' }),
+  status: z.enum(['pending', 'paid'], { invalid_type_error: 'Please select an invoice status.', }),
+  date: z.string(),
+});
+
+export type State = {
+  errors?: {
+    customerId?: string[];
+    amount?: string[];
+    status?: string[];
+  };
+  message?: string | null;
+};
 
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
-export async function createInvoice(formData: FormData) {
-  const { customerId, amount, status } = CreateInvoice.parse({
+export async function createInvoice(privState: State, formData: FormData) {
+  const validateFields = CreateInvoice.safeParse({
     customerId: formData.get('customerId'),
     amount: formData.get('amount'),
     status: formData.get('status')
   });
+  if (!validateFields.success) {
+    return {
+      errors: validateFields.error.flatten().fieldErrors,
+      message: 'Missing fields failed to create the invoice'
+    };
+  }
+
+  const { customerId, amount, status } = validateFields.data
   const amountInCents = amount * 100;
   const date = new Date().toISOString().split('T')[0];
 
